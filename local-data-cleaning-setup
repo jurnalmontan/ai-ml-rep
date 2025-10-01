@@ -1,0 +1,124 @@
+# Practice activity: Setup a local data cleaning and preprocessing tool
+# !pip install pandas numpy scikit-learn missingno
+
+# Ensure missingno is installed
+# %pip install missingno
+
+# Part 2. Create the data cleaning and preprocessing script
+# Explanation: These libraries provide the functions and methods you’ll need to clean and preprocess your data, such as handling missing values, scaling data, and visualizing missing data.
+import pandas as pd
+import numpy as np
+from sklearn.preprocessing import StandardScaler, MinMaxScaler
+import  missingno as msno # For visualizing missing data
+
+# Load the dataset into a pandas DataFrame
+df = pd.read_csv('Users/Razvan/Preprocessing Tool/example_products-100.csv') # Replace 'your_dataset.csv' with your actual dataset file
+
+# Display the first few rows of the DataFrame
+print("Initial DataFrame:")
+print(df.head())
+
+# Check for missing values
+# Visualize missing data
+msno.matrix(df)
+msno.heatmap(df)
+
+# Drop rows with missing values
+df_cleaned = df.dropna()
+
+# Alternatively, fill missing values with the mean of the column (numeric columns only)
+df_cleaned = df.copy()
+for col in df_cleaned.select_dtypes(include=[np.number]).columns:
+    df_cleaned[col] = df_cleaned[col].fillna(df_cleaned[col].mean())
+for col in df_cleaned.select_dtypes(include=['object', 'category']).columns:
+    if df_cleaned[col].isnull().any():
+        df_cleaned[col] = df_cleaned[col].fillna(df_cleaned[col].mode()[0])
+
+# Handle outliers using Z-score method
+from scipy import stats
+numeric_cols = df_cleaned.select_dtypes(include=[np.number]).columns
+z_scores = np.abs(stats.zscore(df_cleaned[numeric_cols]))
+df_no_outliers = df_cleaned[(z_scores < 3).all(axis=1)]
+
+# Or handle outliers using IQR method for the 'Price' column
+if 'Price' in df_cleaned.columns:
+    upper_limit = df_cleaned['Price'].quantile(0.95)
+    df_cleaned['Price'] = np.where(df_cleaned['Price'] > upper_limit, upper_limit, df_cleaned['Price'])
+# Fix outliers for multiple columns using IQR method
+for col in ['Price', 'Stock', 'Internal ID']:
+    if col in df_cleaned.columns:
+        upper_limit = df_cleaned[col].quantile(0.95)
+        lower_limit = df_cleaned[col].quantile(0.05)
+        df_cleaned[col] = np.where(df_cleaned[col] > upper_limit, upper_limit, df_cleaned[col])
+        df_cleaned[col] = np.where(df_cleaned[col] < lower_limit, lower_limit, df_cleaned[col])
+
+# For categorical columns like 'Color' and 'Size', fill missing values with the mode
+for col in ['Color', 'Size']:
+    if col in df_cleaned.columns:
+        mode_val = str(df_cleaned[col].mode()[0])
+        df_cleaned[col] = df_cleaned[col].fillna(mode_val)
+
+# Select only numeric columns for scaling
+numeric_cols = df_cleaned.select_dtypes(include=[np.number]).columns
+
+scaler = MinMaxScaler()
+df_scaled = df_cleaned.copy()
+df_scaled[numeric_cols] = scaler.fit_transform(df_cleaned[numeric_cols])
+
+scaler = StandardScaler()
+df_normalized = df_cleaned.copy()
+df_normalized[numeric_cols] = scaler.fit_transform(df_cleaned[numeric_cols])
+
+# Encode categorical variables using one-hot encoding
+# Automatically detect categorical columns (object or category dtype)
+categorical_cols = df_normalized.select_dtypes(include=['object', 'category']).columns.tolist()
+if categorical_cols:
+    df_encoded = pd.get_dummies(df_normalized, columns=categorical_cols, drop_first=True)
+else:
+    df_encoded = df_normalized.copy()  # No categorical columns to encode
+
+# Save the cleaned and preprocessed DataFrame to a new CSV file
+df_encoded.to_csv('cleaned_preprocessed_data.csv', index=False) # Saves the cleaned data to a new CSV file
+# Explanation: This script covers loading the dataset, checking for missing values, handling missing data, dealing with outliers, scaling and normalizing data, encoding categorical variables, and saving the cleaned data to a new file.
+
+print("Data cleaning and preprocessing completed. Cleaned data saved to 'cleaned_preprocessed_data.csv'.")
+
+# Automate the workflow
+
+def load_data(file_path):
+    return pd.read_csv(file_path)
+def handle_missing_values(df):
+    df_filled = df.copy()
+    for col in df_filled.select_dtypes(include=[np.number]).columns:
+        df_filled[col] = df_filled[col].fillna(df_filled[col].mean())
+    for col in df_filled.select_dtypes(include=['object', 'category']).columns:
+        if df_filled[col].isnull().any():
+            df_filled[col] = df_filled[col].fillna(df_filled[col].mode()[0])
+    return df_filled
+def remove_outliers(df):
+    numeric_cols = df.select_dtypes(include=[np.number]).columns
+    z_scores = np.abs(stats.zscore(df[numeric_cols]))
+    return df[(z_scores < 3).all(axis=1)]
+def scale_data(df):
+    scaler = MinMaxScaler()
+    numeric_cols = df.select_dtypes(include=[np.number]).columns
+    df_scaled = df.copy()
+    df_scaled[numeric_cols] = scaler.fit_transform(df[numeric_cols])
+    return df_scaled
+def encode_categorical(df):
+    categorical_cols = df.select_dtypes(include=['object', 'category']).columns.tolist()
+    if categorical_cols:
+        return pd.get_dummies(df, columns=categorical_cols, drop_first=True)
+    else:
+        return df.copy()
+def save_data(df, output_filepath):
+    df.to_csv(output_filepath, index=False) # Saves the cleaned data to a new CSV file
+
+# Example usage
+# These functions encapsulate each step of the data cleaning and preprocessing workflow, making it easier to apply the same process to different datasets.
+# Use the already loaded df instead of loading from a non-existent file
+df_processed = handle_missing_values(df)
+df_processed = remove_outliers(df_processed)
+df_processed = scale_data(df_processed)
+df_processed = encode_categorical(df_processed)
+save_data(df_processed, 'cleaned_preprocessed_data.csv')
