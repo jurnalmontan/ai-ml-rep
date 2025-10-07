@@ -1,0 +1,95 @@
+# Step-by-step guide to identifying errors in data collection
+
+# Step 1: Understanding the dataset
+# Import necessary libraries
+import pandas as pd
+
+# Load the dataset into a DataFrame (assuming a CSV file for this example)
+data = pd.read_csv('/home/azureuser/cloudfiles/code/Users/Razvan/Preprocessing Tool/example_products-100.csv') # Replace 'data.csv' with your actual data file
+
+# Display the first few rows of the dataset
+print(data.head())
+
+# Check the data types of each column
+print(data.dtypes)
+ 
+# Step 2: Identifying missing values
+# Check for missing values in each column
+missing_values = data.isnull().sum()
+print("Missing values in each column:\n", missing_values > 0)
+
+# Handle missing values
+# Option 1: Remove rows and/or columns with missing values
+df_cleaned = data.dropna()  # Remove rows with any missing values
+# Option 2: Fill missing values with a specific value (e.g., mean, median, mode)
+df_filled = data.fillna(data.mean())  # Fill missing values with the mean of each column
+# Note: Choose one of the above options based on your analysis
+
+# Detect outliers using Z-score method
+from scipy import stats
+import numpy as np
+import matplotlib.pyplot as plt
+
+# Use descriptive statistics to identify potential outliers
+print(data.describe())
+
+# Visualize data to spot outliers using box plots
+data.boxplot(column=['Price'])  # Use correct column name 'Price'
+plt.show()
+
+# Calculate Z-scores to identify outliers
+z_scores = np.abs(stats.zscore(data.select_dtypes(include=[np.number])))
+
+# Find rows with Z-score greater than 3 (common threshold for outliers)
+outliers = (z_scores > 3).all(axis=1)
+print("Outliers detected:\n", data[outliers])
+
+# Save outliers to a dedicated CSV file
+data[outliers].to_csv('/home/azureuser/cloudfiles/code/Users/Razvan/Preprocessing Tool/outliers_detected.csv', index=False)
+
+# Handle outliers
+# Option 1: Remove outliers
+df_no_outliers = data[(z_scores < 3).all(axis=1)]
+# Option 2: Transform outliers (e.g., log transformation)
+data['Price_log'] = np.where(data['Price'] > 0, np.log(data['Price']), 0)  # Log transform 'Price' column 
+# Note: Choose one of the above options based on your analysis
+
+# Step 4: Identify data entry errors
+# Check for inconsistent data types in columns
+# Check for unique values in categorical columns to spot inconsistencies
+print(data['Category'].unique())  # Use correct column name 'Category'
+
+# Use value counts to identify anomalies in categorical data
+print(data['Category'].value_counts())  # Use correct column name 'Category'
+
+# Check numeric columns for impossible values (e.g., negative prices)
+print(data[data['Price'] < 0])  # Use correct column name 'Price'
+
+# Correct data entry errors
+# Option 1: Remove erroneous entries
+# Example: Clean up a category column (replace with your actual column if needed)
+# data['Category'] = data['Category'].str.strip().str.lower().replace({'misspelled': 'correct'})  # Example replacement
+
+# Option 2: Correct erroneous entries based on domain knowledge
+data.loc[data['Price'] < 0, 'Price'] = data['Price'].median()  # Replace negative prices with median price
+# Note: Choose one of the above options based on your analysis
+
+# Correct numeric errors
+# For example, if a price is unreasonably high, set a threshold and cap it
+price_threshold = data['Price'].quantile(0.99)  # Set threshold at 99th percentile
+data.loc[data['Price'] > price_threshold, 'Price'] = price_threshold
+# Note: Adjust the threshold based on your analysis
+
+# Step 5: Validate data consistency
+# Check for duplicate entries
+duplicates = data.duplicated()
+print("Duplicate entries:\n", data[duplicates])
+
+# Cross-validate data consistency between related columns
+# For example, if 'total_price' should equal 'Price' * 'quantity'
+# Uncomment and adjust the following if you have these columns:
+# inconsistent_totals = data[data['total_price'] != data['Price'] * data['quantity']]
+# print("Inconsistent total prices:\n", inconsistent_totals)
+# Handle duplicates
+df_no_duplicates = data.drop_duplicates()
+
